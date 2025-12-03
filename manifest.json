@@ -1,12 +1,16 @@
 {
-    "name": "Aureen X",
-    "short_name": "Aureen",
-    "description": "Calculadora inteligente con diseño Liquid Glass del Proyecto Aureen.",
+    "name": "Nova X",
+    "short_name": "Nova",
+    "description": "Calculadora inteligente de Tasa BCV y Divisas con diseño simple. Rápida, precisa y hecha para Venezuela.",
+    "id": "/",
     "start_url": "index.html",
+    "scope": "/",
     "display": "standalone",
     "orientation": "portrait",
     "background_color": "#1a1a2e",
     "theme_color": "#0A84FF",
+    "lang": "es",
+    "categories": ["finance", "productivity", "utilities"],
     "icons": [
         {
             "src": "icon-192.png",
@@ -19,6 +23,22 @@
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "any maskable"
+        }
+    ],
+    "screenshots": [
+        {
+            "src": "screenshot-mobile.png",
+            "sizes": "1080x1920",
+            "type": "image/png",
+            "form_factor": "narrow",
+            "label": "Pantalla Principal de Aureen X"
+        },
+        {
+            "src": "screenshot-desktop.png",
+            "sizes": "1920x1080",
+            "type": "image/png",
+            "form_factor": "wide",
+            "label": "Vista de Escritorio de Aureen X"
         }
     ]
 }
