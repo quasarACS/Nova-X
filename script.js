@@ -87,7 +87,7 @@ function updateBannerUI(type, value = "") {
         content = `
             <div class="next-rate-badge alert-badge">
                 <span class="next-rate-icon">🔴</span>
-                <span class="next-rate-label">Tasa Mañana:</span>
+                <span class="next-rate-label">Tasa De Mañana:</span>
                 <span class="next-rate-value" style="color:#FF5252; font-weight:700; margin-left:5px;">
                     ${value}
                 </span>
@@ -99,7 +99,7 @@ function updateBannerUI(type, value = "") {
         content = `
             <div class="next-rate-badge monitoring-badge">
                 <span class="next-rate-icon">📡</span>
-                <span class="next-rate-label">Monitoreando BCV...</span>
+                <span class="next-rate-label">Buscando datos.</span>
             </div>
         `;
     }
@@ -517,4 +517,5 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('button, .venezuela-banner, .creator-signature, .main-amount, .converted-amount').forEach(btn => {
         btn.addEventListener('click', () => triggerHaptic());
     });
+
 });
