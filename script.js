@@ -441,7 +441,7 @@ function shareToWhatsApp(mode) {
     // 1. Verificar si está vacío (Tu lógica original)
     if (parseRaw(state[mode].currentInput) === 0) {
         const shopPhoneNumber = "584141802040"; 
-        window.open(`https://wa.me/${shopPhoneNumber}?text=${encodeURIComponent("Hola Erick, me interesa saber más sobre Aureen X.")}`, '_blank');
+        window.open(`https://wa.me/${shopPhoneNumber}?text=${encodeURIComponent("Hola Erick, me interesa saber más sobre Nova X.")}`, '_blank');
         return; 
     }
 
@@ -451,7 +451,7 @@ function shareToWhatsApp(mode) {
     // Las líneas '────' crean orden visual.
     // La flecha '⬇️' indica conversión.
     const message = 
-`*Aureen X* 💎 | Reporte
+`*Nova X* 💎 | Reporte
 ──────────────
 💵 *${data.amountUSD} $*
       ⬇️
@@ -460,7 +460,7 @@ function shareToWhatsApp(mode) {
 📅 *Fecha:* ${data.date}
 📈 *Tasa:* ${data.rate}
 
-🤖 _Calcula aquí:_
+🤖 _Conversa con Aureen:_
 👉 t.me/aureenAIbot`;
 
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
@@ -519,3 +519,4 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
 });
+
