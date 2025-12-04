@@ -1,17 +1,61 @@
 // ==========================================
-// PROYECTO AUREEN X - v28.0 (ALWAYS ON BANNER)
+// PROYECTO NOVA X - v29.0 (FINAL)
 // ==========================================
 
-// --- 1. CONFIGURACIÓN PWA ---
+// --- 1. CONFIGURACIÓN PWA Y BOTÓN DE INSTALACIÓN ---
 let deferredInstallPrompt = null;
+
+// A. Detectar si la app es instalable (Chrome/Android/Edge)
 window.addEventListener('beforeinstallprompt', (e) => {
+    // Evitamos que Chrome muestre su barra automática (queremos usar nuestro botón)
     e.preventDefault();
     deferredInstallPrompt = e;
-    const installBtn = document.getElementById('install-pwa-btn');
-    if (installBtn) installBtn.style.display = 'block';
+    
+    // Si NO está instalada, mostramos nuestro banner flotante
+    if (!window.matchMedia('(display-mode: standalone)').matches) {
+        const banner = document.getElementById('install-banner');
+        if (banner) banner.style.display = 'flex';
+    }
 });
 
-// --- 2. ESTADO GLOBAL ---
+// B. Lógica del Botón "INSTALAR AHORA"
+document.addEventListener('DOMContentLoaded', () => {
+    const installBtn = document.getElementById('install-btn-action');
+    if (installBtn) {
+        installBtn.addEventListener('click', async () => {
+            if (deferredInstallPrompt) {
+                // Lanzamos el cuadro nativo del sistema
+                deferredInstallPrompt.prompt();
+                // Esperamos a ver qué dice el usuario
+                const { outcome } = await deferredInstallPrompt.userChoice;
+                console.log(`Usuario respondió: ${outcome}`);
+                // Ocultamos el banner pase lo que pase
+                document.getElementById('install-banner').style.display = 'none';
+                deferredInstallPrompt = null;
+            }
+        });
+    }
+});
+
+// C. Si se instaló con éxito, ocultar todo
+window.addEventListener('appinstalled', () => {
+    document.getElementById('install-banner').style.display = 'none';
+    console.log('Nova X instalada correctamente');
+});
+
+// D. Detección especial para iPhone (iOS)
+function isIOS() {
+    return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+// --- 2. REGISTRO SERVICE WORKER (Para que funcione Offline) ---
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('SW registrado', reg))
+        .catch(err => console.warn('Error SW', err));
+}
+
+// --- 3. ESTADO GLOBAL ---
 let state = {
     bcv: { rate: 0, currentInput: "0", isFromUSD: true },
     custom: { rate: 0, currentInput: "0", isFromUSD: true },
@@ -19,19 +63,17 @@ let state = {
 };
 let currentMode = 'bcv';
 
-// --- 3. UTILIDADES ---
+// --- 4. UTILIDADES ---
 function getTodayString() {
     const d = new Date();
     return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 }
 
-// NUEVO HORARIO: 6:00 PM (18:00) a 11:59 PM (23:59)
+// HORARIO: 6:00 PM (18:00) a 11:59 PM (23:59)
 function isPreviewWindow() {
     const h = new Date().getHours();
     return (h >= 18 && h <= 23); 
 }
-
-function isNewDay() { return !isPreviewWindow(); }
 
 function formatNumber(numStr) {
     if (!numStr) return "0";
@@ -44,7 +86,7 @@ function parseRaw(numStr) {
     return parseFloat(numStr.replace(/\./g, '').replace(',', '.')) || 0;
 }
 
-// --- 4. INTERFAZ GRÁFICA (UI) ---
+// --- 5. INTERFAZ GRÁFICA (UI) ---
 
 function applyRateToUI(rate, dateLabel, color) {
     const bcvRateDisplay = document.getElementById('bcv-rate-display');
@@ -59,7 +101,7 @@ function applyRateToUI(rate, dateLabel, color) {
     updateDisplay('bcv');
 }
 
-// FUNCIÓN MAESTRA DEL BANNER
+// BANNER DE TASA MAÑANA
 function updateBannerUI(type, value = "") {
     const displayContainer = document.querySelector('.rate-info');
     if (!displayContainer) return;
@@ -73,7 +115,6 @@ function updateBannerUI(type, value = "") {
     
     let content = "";
     
-    // CASO 1: ESTADO POR DEFECTO (DÍA)
     if (type === 'default') {
         content = `
             <div class="next-rate-badge default-badge">
@@ -82,24 +123,22 @@ function updateBannerUI(type, value = "") {
             </div>
         `;
     }
-    // CASO 2: TASA NUEVA DETECTADA (NOCHE)
     else if (type === 'new_rate') {
         content = `
             <div class="next-rate-badge alert-badge">
                 <span class="next-rate-icon">🔴</span>
-                <span class="next-rate-label">Tasa De Mañana:</span>
+                <span class="next-rate-label">Tasa Mañana:</span>
                 <span class="next-rate-value" style="color:#FF5252; font-weight:700; margin-left:5px;">
                     ${value}
                 </span>
             </div>
         `;
     }
-    // CASO 3: MONITOREANDO / SIN CAMBIOS (NOCHE)
     else if (type === 'monitoring') {
         content = `
             <div class="next-rate-badge monitoring-badge">
                 <span class="next-rate-icon">📡</span>
-                <span class="next-rate-label">Buscando datos.</span>
+                <span class="next-rate-label">Monitoreando BCV...</span>
             </div>
         `;
     }
@@ -107,7 +146,7 @@ function updateBannerUI(type, value = "") {
     container.innerHTML = content;
 }
 
-// --- 5. CORE: MOTOR DE BÚSQUEDA ---
+// --- 6. CORE: MOTOR DE BÚSQUEDA ---
 
 async function fetchBCVRate(forceUpdate = false) {
     const bcvRateDisplay = document.getElementById('bcv-rate-display');
@@ -120,28 +159,25 @@ async function fetchBCVRate(forceUpdate = false) {
     const savedDate = localStorage.getItem('aureen-bcv-date');
     const savedNextRate = parseFloat(localStorage.getItem('aureen-next-rate')) || 0;
 
-    // A. MOSTRAR CACHÉ (Verde)
+    // MOSTRAR CACHÉ
     if (savedRate > 0) {
         const color = (savedDate === todayStr) ? colorGreen : colorOld;
         applyRateToUI(savedRate, savedDate || "--/--", color);
     }
 
-    // B. CONTROL DEL BANNER (Lógica Inicial)
-    // Si NO es de noche -> Mostrar mensaje por defecto "Promedio Operaciones"
+    // CONTROL DEL BANNER
     if (!isPreviewWindow()) {
         updateBannerUI('default');
     } 
-    // Si ES de noche y ya tenemos tasa futura guardada -> Mostrarla
     else if (isPreviewWindow() && savedNextRate > 0) {
         const isSame = Math.abs(savedNextRate - savedRate) < 0.01;
         updateBannerUI(isSame ? 'monitoring' : 'new_rate', savedNextRate.toFixed(2).replace('.', ','));
     }
-    // Si ES de noche pero no tenemos nada aún -> Mostrar "Monitoreando"
     else {
         updateBannerUI('monitoring');
     }
 
-    // C. BÚSQUEDA DE DATOS
+    // BÚSQUEDA DE DATOS
     if (forceUpdate || isPreviewWindow() || savedDate !== todayStr) {
         
         if (forceUpdate && bcvRateDisplay) {
@@ -167,7 +203,7 @@ async function fetchBCVRate(forceUpdate = false) {
             } catch (e) {}
         }
 
-        // 2. Microlink (Respaldo)
+        // 2. Microlink
         if (!success && isPreviewWindow()) {
             try {
                 const target = `https://www.bcv.org.ve/?t=${cacheBuster}`;
@@ -185,7 +221,7 @@ async function fetchBCVRate(forceUpdate = false) {
             } catch(e) {}
         }
 
-        // 3. DolarAPI (Respaldo final)
+        // 3. DolarAPI
         if (!success) {
             try {
                 const resp = await fetch(`https://ve.dolarapi.com/v1/dolares/oficial?${cacheBuster}`);
@@ -199,12 +235,9 @@ async function fetchBCVRate(forceUpdate = false) {
             } catch (e) {}
         }
 
-        // D. RESULTADO
+        // RESULTADO
         if (success && fetchedRate > 0) {
-            
-            // --- MODO NOCHE (8 PM - 12 AM) ---
             if (isPreviewWindow()) {
-                // Tasa Verde: Intacta
                 if (savedRate === 0 || savedDate !== todayStr) {
                     applyRateToUI(fetchedRate, todayStr, colorGreen);
                     localStorage.setItem('aureen-bcv-rate', fetchedRate);
@@ -213,32 +246,21 @@ async function fetchBCVRate(forceUpdate = false) {
                     applyRateToUI(savedRate, todayStr, colorGreen);
                 }
                 
-                // Tasa Roja: VERIFICAR CAMBIO
                 const isSame = Math.abs(fetchedRate - savedRate) < 0.01;
-                
                 if (isSame) {
-                    // Si es igual, mostramos que seguimos monitoreando (o el mensaje default si prefieres)
                     updateBannerUI('monitoring');
                 } else {
-                    // SI ES DIFERENTE: ¡BANNER ROJO!
                     updateBannerUI('new_rate', fetchedRate.toFixed(2).replace('.', ','));
                     localStorage.setItem('aureen-next-rate', fetchedRate);
                 }
-            } 
-            
-            // --- MODO DÍA ---
-            else {
-                // Actualizamos verde
+            } else {
                 localStorage.setItem('aureen-bcv-rate', fetchedRate);
                 localStorage.setItem('aureen-bcv-date', todayStr);
                 applyRateToUI(fetchedRate, todayStr, colorGreen);
-                // Ponemos el banner por defecto
                 updateBannerUI('default');
-                // Borramos memoria de tasa futura
                 localStorage.removeItem('aureen-next-rate');
             }
         } else {
-            // FALLO: Restaurar verde si existe
             if (savedRate > 0) {
                 applyRateToUI(savedRate, savedDate || "--/--", (savedDate === todayStr) ? colorGreen : colorOld);
             }
@@ -246,12 +268,8 @@ async function fetchBCVRate(forceUpdate = false) {
     }
 }
 
-// --- 6. VIGILANTE ---
+// --- 7. VIGILANTE ---
 function startNightlyWatcher() {
-    // Al iniciar, verifica hora
-    const h = new Date().getHours();
-    
-    // Si estamos en el cambio de turno (7:59 -> 8:00), actualiza
     setInterval(() => {
         const nowH = new Date().getHours();
         const nowM = new Date().getMinutes();
@@ -259,7 +277,7 @@ function startNightlyWatcher() {
     }, 60000);
 }
 
-// --- 7. INICIALIZACIÓN ---
+// --- 8. INICIALIZACIÓN ---
 window.onload = function() {
     try { Telegram.WebApp.ready(); } catch (e) {}
 
@@ -271,31 +289,29 @@ window.onload = function() {
 
     try { state.general.history = JSON.parse(localStorage.getItem('aureen-calc-history')) || []; } catch (e) {}
     
-    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-        navigator.serviceWorker.register('sw.js').catch(console.error);
-    }
-
     // CARGAR MODO MANUAL
     const savedCustom = localStorage.getItem('aureen-custom-val');
     if (savedCustom) {
-        document.getElementById('custom-rate-input').value = savedCustom;
+        const customInput = document.getElementById('custom-rate-input');
+        if(customInput) customInput.value = savedCustom;
         state.custom.rate = parseFloat(savedCustom);
     }
 
     fetchBCVRate();        
     startNightlyWatcher(); 
     updateDisplay('custom');
-    updateDisplay('general');
+    //updateDisplay('general'); // Si usas el modo general descomenta esto
 
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-    if (!isStandalone) {
+    // LÓGICA FALLBACK PARA IPHONE
+    // Solo si es iOS y NO está instalada, mostramos el modal viejo
+    if (isIOS() && !window.matchMedia('(display-mode: standalone)').matches) {
         setTimeout(() => {
             if (!sessionStorage.getItem('install-modal-closed')) showModal('install-pwa-modal');
         }, 3000);
     }
 };
 
-// --- 8. FUNCIONES CORE ---
+// --- 9. FUNCIONES DE CALCULADORA ---
 function switchMode(mode) {
     document.getElementById('options-menu').classList.remove('show');
     currentMode = mode;
@@ -333,42 +349,47 @@ function updateDisplay(mode) {
         const toSymbol = document.getElementById(`${mode}-to-symbol`);
         
         if (mode === 'custom') {
-            const inputVal = document.getElementById('custom-rate-input').value;
-            // Guardar al escribir
+            const customInput = document.getElementById('custom-rate-input');
+            const inputVal = customInput ? customInput.value : "0";
             localStorage.setItem('aureen-custom-val', inputVal);
             state.custom.rate = parseFloat(inputVal.replace(',', '.')) || 0;
         }
-        mainDisplay.innerText = formatNumber(state[mode].currentInput);
+        
+        if(mainDisplay) mainDisplay.innerText = formatNumber(state[mode].currentInput);
+        
         const currentRate = state[mode].rate;
-        if (currentRate === 0) { subDisplay.innerText = "0,00"; return; }
+        if (currentRate === 0) { if(subDisplay) subDisplay.innerText = "0,00"; return; }
+        
         const mainValue = parseRaw(state[mode].currentInput);
         let subValue = state[mode].isFromUSD ? (mainValue * currentRate) : (mainValue / currentRate);
-        if (state[mode].isFromUSD) { fromSymbol.innerText = "$"; toSymbol.innerText = "Bs"; }
-        else { fromSymbol.innerText = "Bs"; toSymbol.innerText = "$"; }
-        if (!isFinite(subValue) || isNaN(subValue)) subValue = 0;
-        subDisplay.innerText = subValue.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    } else if (mode === 'general') {
-        document.getElementById('general-main-display').innerText = formatNumber(state.general.currentInput);
-        if(state.general.operation != null) {
-            document.getElementById('general-sub-display').innerText = `${formatNumber(state.general.previousInput)} ${state.general.operation}`;
-        } else {
-            document.getElementById('general-sub-display').innerText = '';
+        
+        if (state[mode].isFromUSD) { 
+            if(fromSymbol) fromSymbol.innerText = "$"; 
+            if(toSymbol) toSymbol.innerText = "Bs"; 
+        } else { 
+            if(fromSymbol) fromSymbol.innerText = "Bs"; 
+            if(toSymbol) toSymbol.innerText = "$"; 
         }
+        
+        if (!isFinite(subValue) || isNaN(subValue)) subValue = 0;
+        if(subDisplay) subDisplay.innerText = subValue.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 }
 function swapCurrencies(mode) {
     state[mode].isFromUSD = !state[mode].isFromUSD;
-    const subDisplayText = document.getElementById(`${mode}-sub-display`).innerText;
-    state[mode].currentInput = parseRaw(subDisplayText).toString().replace('.', ',');
-    updateDisplay(mode);
+    const subDisplay = document.getElementById(`${mode}-sub-display`);
+    if(subDisplay) {
+        const subDisplayText = subDisplay.innerText;
+        state[mode].currentInput = parseRaw(subDisplayText).toString().replace('.', ',');
+        updateDisplay(mode);
+    }
 }
 
-// --- 9. UI EXTRAS ---
+// --- 10. UI EXTRAS & COMPARTIR ---
 function toggleOptionsMenu() { document.getElementById('options-menu').classList.toggle('show'); }
 function showModal(id) { 
     document.getElementById(id).classList.add('show'); 
     document.getElementById('options-menu').classList.remove('show');
-    if (id === 'history-screen') renderHistory();
 }
 function closeModal(id) { 
     document.getElementById(id).classList.remove('show');
@@ -376,9 +397,10 @@ function closeModal(id) {
 }
 function toggleTheme() {
     const toggle = document.getElementById('theme-toggle');
-    if (toggle.checked) { document.body.setAttribute('data-theme', 'light'); localStorage.setItem('aureen-calc-theme', 'light'); }
+    if (toggle && toggle.checked) { document.body.setAttribute('data-theme', 'light'); localStorage.setItem('aureen-calc-theme', 'light'); }
     else { document.body.removeAttribute('data-theme'); localStorage.setItem('aureen-calc-theme', 'dark'); }
-    // En el modo "Solaris" no hay checkbox, pero la lógica es la misma
+    
+    // Fallback botón solaris
     const body = document.body;
     const current = body.getAttribute('data-theme');
     if(current === 'light') {
@@ -390,66 +412,55 @@ function toggleTheme() {
     }
     if (navigator.vibrate) navigator.vibrate(10);
 }
-function triggerInstallPrompt() { if (deferredInstallPrompt) deferredInstallPrompt.prompt(); }
+
 window.addEventListener('click', (e) => {
     const menu = document.getElementById('options-menu');
     const btn = document.getElementById('options-menu-btn');
-    if (e.target && !menu.contains(e.target) && !btn.contains(e.target)) menu.classList.remove('show');
+    if (menu && e.target && !menu.contains(e.target) && btn && !btn.contains(e.target)) menu.classList.remove('show');
 });
 
 // WIDGET COMPARTIR
 function toggleShare(mode) {
     const widget = document.getElementById(`share-widget-${mode}`);
-    if (widget.classList.contains('open')) {
-        widget.classList.remove('open');
-    } else {
-        document.querySelectorAll('.share-container').forEach(el => el.classList.remove('open'));
-        widget.classList.add('open');
-        setTimeout(() => { widget.classList.remove('open'); }, 5000);
+    if (widget) {
+        if (widget.classList.contains('open')) {
+            widget.classList.remove('open');
+        } else {
+            document.querySelectorAll('.share-container').forEach(el => el.classList.remove('open'));
+            widget.classList.add('open');
+            setTimeout(() => { widget.classList.remove('open'); }, 5000);
+        }
+        if (navigator.vibrate) navigator.vibrate(10);
     }
-    if (navigator.vibrate) navigator.vibrate(10);
 }
 
 // ==========================================
-// MÓDULO DE COMPARTIR PRO (DISEÑO TICKET)
+// MÓDULO DE COMPARTIR (DISEÑO TICKET/RECIBO)
 // ==========================================
-
-// Helper para extraer datos limpios y evitar repetir código
 function getShareData(mode) {
     const mainText = document.getElementById(`${mode}-main-display`).innerText;
     const subText = document.getElementById(`${mode}-sub-display`).innerText;
-    
-    // Formateamos la tasa asegurando 2 decimales
     const rate = state[mode].rate.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const date = getTodayString(); // Usamos tu función de fecha existente
+    const date = getTodayString();
     
-    // Identificamos quién es quién para no confundir al usuario
     let amountUSD, amountBS;
-    
     if (state[mode].isFromUSD) {
         amountUSD = mainText;
         amountBS = subText;
     } else {
         amountUSD = subText;
-        amountBS = mainText; // Si el input es Bs, el main es Bs
+        amountBS = mainText;
     }
-
     return { amountUSD, amountBS, rate, date };
 }
 
 function shareToWhatsApp(mode) {
-    // 1. Verificar si está vacío (Tu lógica original)
     if (parseRaw(state[mode].currentInput) === 0) {
         const shopPhoneNumber = "584141802040"; 
-        window.open(`https://wa.me/${shopPhoneNumber}?text=${encodeURIComponent("Hola Erick, me interesa saber más sobre Nova X.")}`, '_blank');
+        window.open(`https://wa.me/${shopPhoneNumber}?text=${encodeURIComponent("Hola Erick, me interesa  Nova X.")}`, '_blank');
         return; 
     }
-
     const data = getShareData(mode);
-
-    // 2. FORMATO TICKET DIGITAL
-    // Las líneas '────' crean orden visual.
-    // La flecha '⬇️' indica conversión.
     const message = 
 `*Nova X* 💎 | Reporte
 ──────────────
@@ -460,54 +471,42 @@ function shareToWhatsApp(mode) {
 📅 *Fecha:* ${data.date}
 📈 *Tasa:* ${data.rate}
 
-🤖 _Conversa con Aureen:_
+🤖 _Calcula aquí:_
 👉 t.me/aureenAIbot`;
-
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
 }
 
 function shareToTelegram(mode) {
     const data = getShareData(mode);
-    
-    // Telegram soporta Markdown limpio.
     const msg = 
-`💎 **Cálculo Aureen X**
+`💎 **Cálculo Nova X**
 
 💵 **${data.amountUSD} $**
 🇻🇪 **${data.amountBS} Bs**
 
 ℹ️ _Tasa del día (${data.date}):_ **${data.rate}**
 🔗 @aureenAIbot`;
-
     const url = `https://t.me/share/url?url=${encodeURIComponent("https://t.me/aureenAIbot")}&text=${encodeURIComponent(msg)}`;
     window.open(url, '_blank');
 }
 
 function shareToSocial(platform, mode) {
-    // Redirigimos a la genérica con el modo correcto
     shareToSocialGeneric(platform, mode);
 }
 
 function shareToSocialGeneric(platform, mode) {
     const data = getShareData(mode);
-    
-    // FORMATO REDES (X / THREADS)
-    // Formato horizontal con hashtags para viralidad
-    const msg = `💱 Aureen X | ${data.date}\n\n💵 ${data.amountUSD}$ ➡️ 🇻🇪 ${data.amountBS} Bs\n\n📊 Tasa: ${data.rate}\n\n#BCV #Venezuela #Dolar #Aureen`;
+    const msg = `💱 Nova X | ${data.date}\n\n💵 ${data.amountUSD}$ ➡️ 🇻🇪 ${data.amountBS} Bs\n\n📊 Tasa: ${data.rate}\n\n#BCV #Venezuela #Dolar #NovaX`;
     const botLink = "https://t.me/aureenAIbot";
-
     let url = "";
-
     if (platform === 'x') {
         url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(msg)}&url=${encodeURIComponent(botLink)}`;
     } else if (platform === 'threads') {
         url = `https://www.threads.net/intent/post?text=${encodeURIComponent(msg + "\n\n" + botLink)}`;
     } else if (platform === 'telegram') {
-        // Redundancia por si acaso se llama directo
         shareToTelegram(mode);
         return;
     }
-    
     window.open(url, '_blank');
 }
 
@@ -517,6 +516,4 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('button, .venezuela-banner, .creator-signature, .main-amount, .converted-amount').forEach(btn => {
         btn.addEventListener('click', () => triggerHaptic());
     });
-
 });
-
